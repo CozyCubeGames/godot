@@ -66,6 +66,7 @@ protected:
 	virtual void _value_changed(double p_value);
 	void _notify_shared_value_changed() { shared->emit_value_changed(); };
 
+	void _notification(int p_what);
 	static void _bind_methods();
 
 	bool _rounded_values = false;

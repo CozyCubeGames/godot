@@ -286,6 +286,9 @@ void Range::_unref_shared() {
 	}
 }
 
+void Range::_notification(int p_what) {
+}
+
 void Range::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_value"), &Range::get_value);
 	ClassDB::bind_method(D_METHOD("get_min"), &Range::get_min);
