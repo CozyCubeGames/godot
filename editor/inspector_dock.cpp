@@ -117,6 +117,33 @@ void InspectorDock::_menu_option_confirm(int p_option, bool p_confirmed) {
 			}
 		} break;
 
+		case OBJECT_REVERT_PARAMS: {
+			if (current) {
+
+				EditorUndoRedoManager *ur = EditorUndoRedoManager::get_singleton();
+				ur->create_action(TTR("Revert Properties"));
+
+				List<PropertyInfo> props;
+				current->get_property_list(&props);
+
+				for (List<PropertyInfo>::Element *E = props.front(); E; E = E->next()) {
+					if (!(E->get().usage & PROPERTY_USAGE_STORAGE)) {
+						continue;
+					}
+
+					const PropertyInfo &prop = E->get();
+					bool is_valid_revert = false;
+					Variant revert_value = EditorPropertyRevert::get_property_revert_value(current, prop.name, &is_valid_revert);
+					if (is_valid_revert) {
+						ur->add_do_property(current, prop.name, revert_value);
+						ur->add_undo_property(current, prop.name, current->get(prop.name));
+					}
+				}
+
+				ur->commit_action();
+			}
+		} break;
+
 		case OBJECT_UNIQUE_RESOURCES: {
 			if (!p_confirmed) {
 				Vector<String> resource_propnames;
@@ -558,6 +585,7 @@ void InspectorDock::update(Object *p_object) {
 	p->add_separator();
 	p->add_shortcut(ED_SHORTCUT("property_editor/copy_params", TTRC("Copy Properties")), OBJECT_COPY_PARAMS);
 	p->add_shortcut(ED_SHORTCUT("property_editor/paste_params", TTRC("Paste Properties")), OBJECT_PASTE_PARAMS);
+	p->add_shortcut(ED_SHORTCUT("property_editor/revert_params", TTRC("Revert Properties")), OBJECT_REVERT_PARAMS);
 
 	if (is_resource || is_node) {
 		p->add_separator();
