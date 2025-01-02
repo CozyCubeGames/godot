@@ -100,6 +100,9 @@ class InspectorDock : public VBoxContainer {
 	AcceptDialog *info_dialog = nullptr;
 
 	int current_option = -1;
+	ConfirmationDialog *revert_properties_confirmation = nullptr;
+	Label *revert_properties_label = nullptr;
+	Tree *revert_properties_list_tree = nullptr;
 	ConfirmationDialog *unique_resources_confirmation = nullptr;
 	Label *unique_resources_label = nullptr;
 	Tree *unique_resources_list_tree = nullptr;

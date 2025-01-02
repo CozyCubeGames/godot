@@ -118,29 +118,76 @@ void InspectorDock::_menu_option_confirm(int p_option, bool p_confirmed) {
 		} break;
 
 		case OBJECT_REVERT_PARAMS: {
-			if (current) {
+			if (!p_confirmed) {
+				Vector<String> revertable_propnames;
 
-				EditorUndoRedoManager *ur = EditorUndoRedoManager::get_singleton();
-				ur->create_action(TTR("Revert Properties"));
+				if (current) {
+					List<PropertyInfo> props;
+					current->get_property_list(&props);
 
-				List<PropertyInfo> props;
-				current->get_property_list(&props);
+					for (List<PropertyInfo>::Element *E = props.front(); E; E = E->next()) {
+						const PropertyInfo &prop = E->get();
+						if (!(prop.usage & PROPERTY_USAGE_STORAGE)) {
+							continue;
+						}
 
-				for (List<PropertyInfo>::Element *E = props.front(); E; E = E->next()) {
-					if (!(E->get().usage & PROPERTY_USAGE_STORAGE)) {
-						continue;
-					}
+						if (prop.name == "transform") {
+							continue;
+						}
 
-					const PropertyInfo &prop = E->get();
-					bool is_valid_revert = false;
-					Variant revert_value = EditorPropertyRevert::get_property_revert_value(current, prop.name, &is_valid_revert);
-					if (is_valid_revert) {
-						ur->add_do_property(current, prop.name, revert_value);
-						ur->add_undo_property(current, prop.name, current->get(prop.name));
+						if (EditorPropertyRevert::can_property_revert(current, prop.name)) {
+							revertable_propnames.append(prop.name);
+						}
 					}
 				}
 
-				ur->commit_action();
+				revert_properties_list_tree->clear();
+				if (revertable_propnames.size()) {
+					const EditorPropertyNameProcessor::Style name_style = inspector->get_property_name_style();
+
+					TreeItem *root = revert_properties_list_tree->create_item();
+					for (const String &E : revertable_propnames) {
+						const String propname = EditorPropertyNameProcessor::get_singleton()->process_name(E, name_style);
+
+						TreeItem *ti = revert_properties_list_tree->create_item(root);
+						ti->set_text(0, propname);
+					}
+
+					revert_properties_label->set_text(TTR("The following properties will be reverted within this resource/object."));
+					revert_properties_confirmation->popup_centered();
+				} else {
+					current_option = -1;
+					revert_properties_label->set_text(TTR("This object has no revertable properties."));
+					revert_properties_confirmation->popup_centered();
+				}
+			} else {
+				if (current) {
+					EditorUndoRedoManager *ur = EditorUndoRedoManager::get_singleton();
+					ur->create_action(TTR("Revert Properties"));
+
+					List<PropertyInfo> props;
+					current->get_property_list(&props);
+
+					for (List<PropertyInfo>::Element *E = props.front(); E; E = E->next()) {
+						const PropertyInfo &prop = E->get();
+						if (!(prop.usage & PROPERTY_USAGE_STORAGE)) {
+							continue;
+						}
+
+						if (prop.name == "transform") {
+							continue;
+						}
+
+						bool is_valid_revert = false;
+						Variant revert_value = EditorPropertyRevert::get_property_revert_value(current, prop.name, &is_valid_revert);
+						if (is_valid_revert) {
+							ur->add_do_property(current, prop.name, revert_value);
+							ur->add_undo_property(current, prop.name, current->get(prop.name));
+						}
+					}
+
+					ur->commit_action();
+				}
 			}
 		} break;
 
@@ -785,10 +832,29 @@ InspectorDock::InspectorDock(EditorData &p_editor_data) {
 	info->hide();
 	info->connect(SceneStringName(pressed), callable_mp(this, &InspectorDock::_info_pressed));
 
+	revert_properties_confirmation = memnew(ConfirmationDialog);
+	add_child(revert_properties_confirmation);
+
+	VBoxContainer *container = memnew(VBoxContainer);
+	revert_properties_confirmation->add_child(container);
+
+	revert_properties_label = memnew(Label);
+	container->add_child(revert_properties_label);
+
+	revert_properties_list_tree = memnew(Tree);
+	revert_properties_list_tree->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
+	revert_properties_list_tree->set_hide_root(true);
+	revert_properties_list_tree->set_columns(1);
+	revert_properties_list_tree->set_column_title(0, TTR("Property"));
+	revert_properties_list_tree->set_custom_minimum_size(Size2(0, 200 * EDSCALE));
+	container->add_child(revert_properties_list_tree);
+
+	revert_properties_confirmation->connect(SceneStringName(confirmed), callable_mp(this, &InspectorDock::_menu_confirm_current));
+
 	unique_resources_confirmation = memnew(ConfirmationDialog);
 	add_child(unique_resources_confirmation);
 
-	VBoxContainer *container = memnew(VBoxContainer);
+	container = memnew(VBoxContainer);
 	unique_resources_confirmation->add_child(container);
 
 	unique_resources_label = memnew(Label);
