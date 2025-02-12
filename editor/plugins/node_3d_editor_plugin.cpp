@@ -2840,6 +2840,10 @@ void Node3DEditorPlugin::edited_scene_changed() {
 			viewport->notification(Control::NOTIFICATION_VISIBILITY_CHANGED);
 		}
 	}
+
+	if (get_tree()->get_edited_scene_root() == nullptr) {
+		spatial_editor->set_state(Dictionary());
+	}
 }
 
 void Node3DEditorViewport::_project_settings_changed() {
@@ -4268,7 +4272,6 @@ void Node3DEditorViewport::set_state(const Dictionary &p_state) {
 			previewing->connect(SceneStringName(tree_exiting), callable_mp(this, &Node3DEditorViewport::_preview_exited_scene));
 			RS::get_singleton()->viewport_attach_camera(viewport->get_viewport_rid(), previewing->get_camera()); //replace
 			surface->queue_redraw();
-			previewing_camera = true;
 			preview_camera->set_pressed(true);
 			preview_camera->show();
 		}
@@ -6458,7 +6461,8 @@ Dictionary Node3DEditor::get_state() const {
 		pd["environ_tonemap_enabled"] = environ_tonemap_button->is_pressed();
 		pd["environ_ao_enabled"] = environ_ao_button->is_pressed();
 		pd["environ_gi_enabled"] = environ_gi_button->is_pressed();
-		pd["sun_max_distance"] = sun_max_distance->get_value();
+		pd["sun_shadow_enabled"] = sun_shadow_enabled->is_pressed();
+		pd["sun_shadow_max_distance"] = sun_shadow_max_distance->get_value();
 
 		pd["sun_color"] = sun_color->get_pick_color();
 		pd["sun_energy"] = sun_energy->get_value();
@@ -6586,11 +6590,12 @@ void Node3DEditor::set_state(const Dictionary &p_state) {
 		environ_sky_color->set_pick_color(pd["environ_sky_color"]);
 		environ_ground_color->set_pick_color(pd["environ_ground_color"]);
 		environ_energy->set_value(pd["environ_energy"]);
-		environ_glow_button->set_pressed(pd["environ_glow_enabled"]);
+		environ_glow_button->set_pressed(pd["environ_glow_enabled"] && OS::get_singleton()->get_current_rendering_method() != "gl_compatibility");
 		environ_tonemap_button->set_pressed(pd["environ_tonemap_enabled"]);
 		environ_ao_button->set_pressed(pd["environ_ao_enabled"]);
 		environ_gi_button->set_pressed(pd["environ_gi_enabled"]);
-		sun_max_distance->set_value(pd["sun_max_distance"]);
+		sun_shadow_enabled->set_pressed(pd["sun_shadow_enabled"]);
+		sun_shadow_max_distance->set_value(pd["sun_shadow_max_distance"]);
 
 		sun_color->set_pick_color(pd["sun_color"]);
 		sun_energy->set_value(pd["sun_energy"]);
@@ -8082,6 +8087,18 @@ void Node3DEditor::_sun_environ_settings_pressed() {
 	sun_environ_popup->grab_focus();
 }
 
+void Node3DEditor::_revert_preview_sun() {
+	_load_default_preview_settings(true, false);
+	_preview_settings_changed();
+	_update_preview_environment();
+}
+
+void Node3DEditor::_revert_preview_environ() {
+	_load_default_preview_settings(false, true);
+	_preview_settings_changed();
+	_update_preview_environment();
+}
+
 void Node3DEditor::_add_sun_to_scene(bool p_already_added_environment) {
 	sun_environ_popup->hide();
 
@@ -8664,8 +8681,9 @@ void Node3DEditor::_preview_settings_changed() {
 		t.basis = Basis::from_euler(Vector3(sun_rotation.x, sun_rotation.y, 0));
 		preview_sun->set_transform(t);
 		sun_direction->queue_redraw();
+		preview_sun->set_shadow(sun_shadow_enabled->is_pressed());
 		preview_sun->set_param(Light3D::PARAM_ENERGY, sun_energy->get_value());
-		preview_sun->set_param(Light3D::PARAM_SHADOW_MAX_DISTANCE, sun_max_distance->get_value());
+		preview_sun->set_param(Light3D::PARAM_SHADOW_MAX_DISTANCE, sun_shadow_max_distance->get_value());
 		preview_sun->set_color(sun_color->get_pick_color());
 	}
 
@@ -8686,33 +8704,29 @@ void Node3DEditor::_preview_settings_changed() {
 	}
 }
 
-void Node3DEditor::_load_default_preview_settings() {
+void Node3DEditor::_load_default_preview_settings(bool p_sun, bool p_environ) {
 	sun_environ_updating = true;
 
-	// These default rotations place the preview sun at an angular altitude
-	// of 60 degrees (must be negative) and an azimuth of 30 degrees clockwise
-	// from north (or 150 CCW from south), from north east, facing south west.
-	// On any not-tidally-locked planet, a sun would have an angular altitude
-	// of 60 degrees as the average of all points on the sphere at noon.
-	// The azimuth choice is arbitrary, but ideally shouldn't be on an axis.
-	sun_rotation = Vector2(-Math::deg_to_rad(60.0), Math::deg_to_rad(150.0));
-
-	sun_angle_altitude->set_value(-Math::rad_to_deg(sun_rotation.x));
-	sun_angle_azimuth->set_value(180.0 - Math::rad_to_deg(sun_rotation.y));
-	sun_direction->queue_redraw();
-	environ_sky_color->set_pick_color(Color(0.385, 0.454, 0.55));
-	environ_ground_color->set_pick_color(Color(0.2, 0.169, 0.133));
-	environ_energy->set_value(1.0);
-	if (OS::get_singleton()->get_current_rendering_method() != "gl_compatibility") {
-		environ_glow_button->set_pressed(true);
+	if (p_sun) {
+		sun_angle_altitude->set_value(GLOBAL_GET("editor/3d/preview_sun/default_angle_altitude"));
+		sun_angle_azimuth->set_value(GLOBAL_GET("editor/3d/preview_sun/default_angle_azimuth"));
+		sun_rotation = Vector2(-Math::deg_to_rad(sun_angle_altitude->get_value()), Math::deg_to_rad(180.0 - sun_angle_azimuth->get_value()));
+		sun_color->set_pick_color(GLOBAL_GET("editor/3d/preview_sun/default_color"));
+		sun_energy->set_value(GLOBAL_GET("editor/3d/preview_sun/default_energy"));
+		sun_shadow_enabled->set_pressed(GLOBAL_GET("editor/3d/preview_sun/default_shadow_enabled"));
+		sun_shadow_max_distance->set_value(GLOBAL_GET("editor/3d/preview_sun/default_shadow_max_distance"));
+		sun_direction->queue_redraw();
 	}
-	environ_tonemap_button->set_pressed(true);
-	environ_ao_button->set_pressed(false);
-	environ_gi_button->set_pressed(false);
-	sun_max_distance->set_value(100);
 
-	sun_color->set_pick_color(Color(1, 1, 1));
-	sun_energy->set_value(1.0);
+	if (p_environ) {
+		environ_sky_color->set_pick_color(GLOBAL_GET("editor/3d/preview_environment/default_sky_color"));
+		environ_ground_color->set_pick_color(GLOBAL_GET("editor/3d/preview_environment/default_ground_color"));
+		environ_energy->set_value(GLOBAL_GET("editor/3d/preview_environment/default_sky_energy"));
+		environ_glow_button->set_pressed(GLOBAL_GET("editor/3d/preview_environment/default_glow") && OS::get_singleton()->get_current_rendering_method() != "gl_compatibility");
+		environ_tonemap_button->set_pressed(GLOBAL_GET("editor/3d/preview_environment/default_tonemap"));
+		environ_ao_button->set_pressed(GLOBAL_GET("editor/3d/preview_environment/default_ao"));
+		environ_gi_button->set_pressed(GLOBAL_GET("editor/3d/preview_environment/default_gi"));
+	}
 
 	sun_environ_updating = false;
 }
@@ -9239,6 +9253,11 @@ Node3DEditor::Node3DEditor() {
 		sun_title->set_text(TTR("Preview Sun"));
 		sun_title->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_CENTER);
 
+		sun_revert = memnew(Button);
+		sun_revert->set_text(TTR("Reset to Default"));
+		sun_revert->connect(SceneStringName(pressed), callable_mp(this, &Node3DEditor::_revert_preview_sun));
+		sun_vb->add_child(sun_revert);
+
 		CenterContainer *sun_direction_center = memnew(CenterContainer);
 		sun_direction = memnew(Control);
 		sun_direction->set_custom_minimum_size(Size2(128, 128) * EDSCALE);
@@ -9318,11 +9337,18 @@ void fragment() {
 		sun_vb->add_margin_child(TTR("Sun Energy"), sun_energy);
 		sun_energy->connect(SceneStringName(value_changed), callable_mp(this, &Node3DEditor::_preview_settings_changed).unbind(1));
 
-		sun_max_distance = memnew(EditorSpinSlider);
-		sun_vb->add_margin_child(TTR("Shadow Max Distance"), sun_max_distance);
-		sun_max_distance->connect(SceneStringName(value_changed), callable_mp(this, &Node3DEditor::_preview_settings_changed).unbind(1));
-		sun_max_distance->set_min(1);
-		sun_max_distance->set_max(4096);
+		sun_shadow_enabled = memnew(CheckBox);
+		sun_vb->add_margin_child(TTR("Shadow Enabled"), sun_shadow_enabled);
+		sun_shadow_enabled->connect(SceneStringName(pressed), callable_mp(this, &Node3DEditor::_preview_settings_changed));
+
+		sun_shadow_max_distance = memnew(EditorSpinSlider);
+		sun_vb->add_margin_child(TTR("Shadow Max Distance"), sun_shadow_max_distance);
+		sun_shadow_max_distance->connect(SceneStringName(value_changed), callable_mp(this, &Node3DEditor::_preview_settings_changed).unbind(1));
+		sun_shadow_max_distance->set_min(1.0);
+		sun_shadow_max_distance->set_max(8192.0);
+		sun_shadow_max_distance->set_step(0.1);
+		sun_shadow_max_distance->set_allow_greater(true);
+		sun_shadow_max_distance->set_exp_ratio(true);
 
 		sun_add_to_scene = memnew(Button);
 		sun_add_to_scene->set_text(TTR("Add Sun to Scene"));
@@ -9353,6 +9379,11 @@ void fragment() {
 		environ_vb->add_child(environ_title);
 		environ_title->set_text(TTR("Preview Environment"));
 		environ_title->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_CENTER);
+
+		environ_revert = memnew(Button);
+		environ_revert->set_text(TTR("Reset to Default"));
+		environ_revert->connect(SceneStringName(pressed), callable_mp(this, &Node3DEditor::_revert_preview_environ));
+		environ_vb->add_child(environ_revert);
 
 		environ_sky_color = memnew(ColorPickerButton);
 		environ_sky_color->set_edit_alpha(false);

@@ -845,7 +845,9 @@ private:
 	EditorSpinSlider *sun_angle_azimuth = nullptr;
 	ColorPickerButton *sun_color = nullptr;
 	EditorSpinSlider *sun_energy = nullptr;
-	EditorSpinSlider *sun_max_distance = nullptr;
+	CheckBox *sun_shadow_enabled = nullptr;
+	EditorSpinSlider *sun_shadow_max_distance = nullptr;
+	Button *sun_revert = nullptr;
 	Button *sun_add_to_scene = nullptr;
 
 	void _sun_direction_draw();
@@ -868,6 +870,7 @@ private:
 	Button *environ_glow_button = nullptr;
 	Button *environ_tonemap_button = nullptr;
 	Button *environ_gi_button = nullptr;
+	Button *environ_revert = nullptr;
 	Button *environ_add_to_scene = nullptr;
 
 	Button *sun_environ_settings = nullptr;
@@ -882,12 +885,14 @@ private:
 
 	bool sun_environ_updating = false;
 
-	void _load_default_preview_settings();
+	void _load_default_preview_settings(bool p_sun = true, bool p_environ = true);
 	void _update_preview_environment();
 
 	void _preview_settings_changed();
 	void _sun_environ_settings_pressed();
 
+	void _revert_preview_sun();
+	void _revert_preview_environ();
 	void _add_sun_to_scene(bool p_already_added_environment = false);
 	void _add_environment_to_scene(bool p_already_added_sun = false);
 
