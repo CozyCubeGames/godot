@@ -624,18 +624,8 @@ void Node3DEditorViewport::_update_camera(real_t p_interp_delta) {
 }
 
 Transform3D Node3DEditorViewport::to_camera_transform(const Cursor &p_cursor) const {
-	Transform3D camera_transform;
-	camera_transform.translate_local(p_cursor.pos);
-	camera_transform.basis.rotate(Vector3(1, 0, 0), -p_cursor.x_rot);
-	camera_transform.basis.rotate(Vector3(0, 1, 0), -p_cursor.y_rot);
-
-	if (orthogonal) {
-		camera_transform.translate_local(0, 0, (get_zfar() - get_znear()) / 2.0);
-	} else {
-		camera_transform.translate_local(0, 0, p_cursor.distance);
-	}
-
-	return camera_transform;
+	Basis basis = Basis::from_euler(Vector3(-p_cursor.x_rot, -p_cursor.y_rot, 0));
+	return Transform3D(basis, p_cursor.pos + basis.get_column(2) * p_cursor.distance);
 }
 
 int Node3DEditorViewport::get_selected_count() const {
