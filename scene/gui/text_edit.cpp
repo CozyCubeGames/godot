@@ -2965,11 +2965,11 @@ void TextEdit::_move_caret_right(bool p_select, bool p_move_by_word) {
 				set_caret_column(0, i == 0, i);
 			} else {
 				PackedInt32Array words = TS->shaped_text_get_word_breaks(text.get_line_data(get_caret_line(i))->get_rid());
-				if (words.is_empty() || cc >= words[words.size() - 1]) {
+				if (words.is_empty() || cc >= words[words.size() - 2]) {
 					// Move to the end when there are no more words.
 					cc = text[get_caret_line(i)].length();
 				} else {
-					for (int j = 1; j < words.size(); j = j + 2) {
+					for (int j = 0; j < words.size(); j = j + 2) {
 						if (words[j] > cc) {
 							cc = words[j];
 							break;
